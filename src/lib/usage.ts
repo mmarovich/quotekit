@@ -30,6 +30,12 @@ function getUsage(): UsageData {
   }
 }
 
+/** Owner/testing: wipe the free-tier counter for this browser. */
+export function resetUsage(): void {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(STORAGE_KEY);
+}
+
 export function getQuotesRemaining(): number {
   const usage = getUsage();
   return Math.max(0, FREE_QUOTE_LIMIT - usage.count);

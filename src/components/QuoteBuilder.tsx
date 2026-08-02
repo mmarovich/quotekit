@@ -21,6 +21,7 @@ import {
   canExportQuote,
   getQuotesRemaining,
   recordQuoteExport,
+  resetUsage,
   FREE_LIMIT,
 } from "@/lib/usage";
 import { generateQuotePdf } from "@/lib/pdf";
@@ -33,6 +34,14 @@ export function QuoteBuilder() {
 
   useEffect(() => {
     setMounted(true);
+    // Owner/testing: visit /builder?reset=usage to refill free exports
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("reset") === "usage") {
+        resetUsage();
+        window.history.replaceState({}, "", "/builder");
+      }
+    }
     setRemaining(getQuotesRemaining());
   }, []);
 
