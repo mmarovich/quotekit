@@ -553,12 +553,12 @@ export function QuoteBuilder() {
               <p className="text-sm font-semibold text-brand-900">100% free</p>
               <p className="mt-1 text-sm text-brand-700">
                 Unlimited quotes. No account. Found a bug or have an idea?{" "}
-                <a
+                <Link
                   href="/contact"
                   className="font-semibold underline hover:text-brand-900"
                 >
                   Contact support
-                </a>
+                </Link>
                 .
               </p>
             </div>
