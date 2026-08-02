@@ -8,7 +8,12 @@ import {
   subtotal,
   taxAmount,
 } from "./calculations";
-import { formatPhone, safeFilename, sanitizePdfText } from "./format";
+import {
+  formatDisplayDate,
+  formatPhone,
+  safeFilename,
+  sanitizePdfText,
+} from "./format";
 
 const MARGIN = 14;
 const LINE = 5;
@@ -63,11 +68,30 @@ function drawFooters(doc: jsPDF): void {
   }
 }
 
+/** Draw a text block and return the Y after the last line. */
+function drawLines(
+  doc: jsPDF,
+  lines: string[],
+  x: number,
+  startY: number,
+  leading: number,
+  maxY?: number
+): number {
+  let y = startY;
+  for (const line of lines) {
+    if (maxY !== undefined && y > maxY) break;
+    doc.text(line, x, y);
+    y += leading;
+  }
+  return y;
+}
+
 export function generateQuotePdf(quote: QuoteData): void {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const leftColWidth = pageWidth * 0.55 - MARGIN;
   const rightX = pageWidth - MARGIN;
+  const contentWidth = pageWidth - MARGIN * 2;
 
   const businessName = sanitizePdfText(quote.businessName || "Your Business");
   const businessEmail = sanitizePdfText(quote.businessEmail);
@@ -90,7 +114,6 @@ export function generateQuotePdf(quote: QuoteData): void {
   }
   contactLines.push(...wrapText(doc, businessAddress, leftColWidth));
 
-  // Cap extremely tall headers (e.g. 20-line address spam)
   let nameLeading = 7;
   let leftBlockHeight =
     nameLines.length * nameLeading +
@@ -100,7 +123,6 @@ export function generateQuotePdf(quote: QuoteData): void {
   const rightBlockHeight = 12 + LINE * 3;
   let headerHeight = Math.max(leftBlockHeight, rightBlockHeight) + PAD * 2;
 
-  // If header is absurdly tall, shrink name font and re-measure
   if (headerHeight > MAX_HEADER_HEIGHT) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
@@ -116,34 +138,23 @@ export function generateQuotePdf(quote: QuoteData): void {
     );
   }
 
-  // Draw header background
   doc.setFillColor(12, 140, 233);
   doc.rect(0, 0, pageWidth, headerHeight, "F");
 
-  // Left: business name + contact
   let y = PAD + 6;
   const nameFontSize = headerHeight >= MAX_HEADER_HEIGHT - 1 ? 14 : 18;
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(nameFontSize);
-  for (const line of nameLines) {
-    if (y > headerHeight - 4) break;
-    doc.text(line, MARGIN, y);
-    y += nameLeading;
-  }
+  y = drawLines(doc, nameLines, MARGIN, y, nameLeading, headerHeight - 4);
 
   if (contactLines.length > 0) {
     y += 3;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
-    for (const line of contactLines) {
-      if (y > headerHeight - 3) break;
-      doc.text(line, MARGIN, y);
-      y += LINE;
-    }
+    drawLines(doc, contactLines, MARGIN, y, LINE, headerHeight - 3);
   }
 
-  // Right: QUOTE label + meta
   let rightY = PAD + 6;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
@@ -155,75 +166,80 @@ export function generateQuotePdf(quote: QuoteData): void {
   const quoteNum = sanitizePdfText(quote.quoteNumber || "—");
   doc.text(`#${quoteNum}`, rightX, rightY, { align: "right" });
   rightY += LINE;
-  doc.text(`Date: ${quote.quoteDate || "—"}`, rightX, rightY, {
+  doc.text(`Date: ${formatDisplayDate(quote.quoteDate)}`, rightX, rightY, {
     align: "right",
   });
   rightY += LINE;
-  doc.text(`Valid until: ${quote.validUntil || "—"}`, rightX, rightY, {
-    align: "right",
-  });
+  doc.text(
+    `Valid until: ${formatDisplayDate(quote.validUntil)}`,
+    rightX,
+    rightY,
+    { align: "right" }
+  );
 
-  // Body
+  // --- Body: measure Bill To block first so table never splits it ---
   doc.setTextColor(30, 30, 30);
   let bodyY = headerHeight + 14;
 
-  // Guard: if header ate the page, start body on page 2
   if (bodyY > pageHeight(doc) - 60) {
     doc.addPage();
     bodyY = MARGIN + 10;
   }
 
+  const billToLines: { text: string; bold?: boolean; size?: number }[] = [];
+
   if (quote.projectTitle) {
-    doc.setFontSize(13);
-    doc.setFont("helvetica", "bold");
-    const titleLines = wrapText(
-      doc,
-      quote.projectTitle,
-      pageWidth - MARGIN * 2
-    );
+    const titleLines = wrapText(doc, quote.projectTitle, contentWidth);
     for (const line of titleLines) {
-      bodyY = ensureSpace(doc, bodyY, 8);
-      doc.text(line, MARGIN, bodyY);
-      bodyY += 6;
+      billToLines.push({ text: line, bold: true, size: 13 });
     }
-    bodyY += 4;
+    billToLines.push({ text: "", size: 4 }); // spacer marker via empty
   }
 
-  bodyY = ensureSpace(doc, bodyY, 20);
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "bold");
-  doc.text("Bill To:", MARGIN, bodyY);
-  bodyY += 6;
+  billToLines.push({ text: "Bill To:", bold: true, size: 11 });
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   if (quote.clientName) {
-    const lines = wrapText(doc, quote.clientName, pageWidth - MARGIN * 2);
-    for (const line of lines) {
-      bodyY = ensureSpace(doc, bodyY, LINE + 2);
-      doc.text(line, MARGIN, bodyY);
-      bodyY += LINE;
+    for (const line of wrapText(doc, quote.clientName, contentWidth)) {
+      billToLines.push({ text: line, size: 10 });
     }
   }
   if (quote.clientEmail) {
-    const lines = wrapText(doc, quote.clientEmail, pageWidth - MARGIN * 2);
-    for (const line of lines) {
-      bodyY = ensureSpace(doc, bodyY, LINE + 2);
-      doc.text(line, MARGIN, bodyY);
-      bodyY += LINE;
+    for (const line of wrapText(doc, quote.clientEmail, contentWidth)) {
+      billToLines.push({ text: line, size: 10 });
     }
   }
   if (quote.clientAddress) {
-    const clientAddrLines = wrapText(
-      doc,
-      quote.clientAddress,
-      pageWidth - MARGIN * 2
-    );
-    for (const line of clientAddrLines) {
-      bodyY = ensureSpace(doc, bodyY, LINE + 2);
-      doc.text(line, MARGIN, bodyY);
-      bodyY += LINE;
+    for (const line of wrapText(doc, quote.clientAddress, contentWidth)) {
+      billToLines.push({ text: line, size: 10 });
     }
+  }
+
+  // Estimate height of bill-to block and ensure it fits before table
+  let estimated = 0;
+  for (const line of billToLines) {
+    if (line.text === "" && line.size === 4) {
+      estimated += 4;
+    } else {
+      estimated += line.size === 13 ? 6 : line.size === 11 ? 7 : LINE;
+    }
+  }
+  estimated += 10; // gap before table
+  bodyY = ensureSpace(doc, bodyY, estimated + 40);
+
+  for (const line of billToLines) {
+    if (line.text === "" && line.size === 4) {
+      bodyY += 4;
+      continue;
+    }
+    const leading = line.size === 13 ? 6 : line.size === 11 ? 7 : LINE;
+    bodyY = ensureSpace(doc, bodyY, leading + 2);
+    doc.setFont("helvetica", line.bold ? "bold" : "normal");
+    doc.setFontSize(line.size ?? 10);
+    doc.setTextColor(30, 30, 30);
+    doc.text(line.text, MARGIN, bodyY);
+    bodyY += leading;
   }
 
   bodyY += 8;
@@ -252,7 +268,6 @@ export function generateQuotePdf(quote: QuoteData): void {
       2: { halign: "right", cellWidth: 35 },
       3: { halign: "right", cellWidth: 35 },
     },
-    // Keep table out of footer zone
     margin: { left: MARGIN, right: MARGIN, bottom: 24 },
   });
 
@@ -297,7 +312,7 @@ export function generateQuotePdf(quote: QuoteData): void {
     doc.setTextColor(30, 30, 30);
     doc.text("Notes:", MARGIN, notesY);
     doc.setFont("helvetica", "normal");
-    const noteLines = wrapText(doc, quote.notes, pageWidth - MARGIN * 2);
+    const noteLines = wrapText(doc, quote.notes, contentWidth);
     let noteY = notesY + 6;
     for (const line of noteLines) {
       noteY = ensureSpace(doc, noteY, LINE + 2);

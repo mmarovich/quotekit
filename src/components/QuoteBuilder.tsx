@@ -25,12 +25,30 @@ import {
   FREE_LIMIT,
 } from "@/lib/usage";
 import { formatPhone, parseClampedNumber } from "@/lib/format";
+import {
+  type FieldErrors,
+  hasErrors,
+  normalizeQuote,
+  validateQuote,
+} from "@/lib/validate";
 import { generateQuotePdf } from "@/lib/pdf";
+
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return <p className="mt-1 text-xs text-red-600">{message}</p>;
+}
+
+function inputClass(hasError?: boolean) {
+  return hasError
+    ? "input-field border-red-400 focus:border-red-500 focus:ring-red-500/20"
+    : "input-field";
+}
 
 export function QuoteBuilder() {
   const [quote, setQuote] = useState<QuoteData>(DEFAULT_QUOTE);
   const [remaining, setRemaining] = useState(FREE_LIMIT);
   const [showLimitModal, setShowLimitModal] = useState(false);
+  const [errors, setErrors] = useState<FieldErrors>({});
   const [exportError, setExportError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
 
@@ -48,6 +66,24 @@ export function QuoteBuilder() {
 
   function updateField<K extends keyof QuoteData>(key: K, value: QuoteData[K]) {
     setQuote((prev) => ({ ...prev, [key]: value }));
+    // Clear field error as user types
+    setErrors((prev) => {
+      const next = { ...prev };
+      const map: Record<string, keyof FieldErrors> = {
+        businessName: "businessName",
+        businessEmail: "businessEmail",
+        businessPhone: "businessPhone",
+        clientName: "clientName",
+        clientEmail: "clientEmail",
+        quoteDate: "quoteDate",
+        validUntil: "validUntil",
+      };
+      const errKey = map[key as string];
+      if (errKey) delete next[errKey];
+      delete next.form;
+      return next;
+    });
+    setExportError(null);
   }
 
   function updateLineItem(
@@ -61,6 +97,12 @@ export function QuoteBuilder() {
         item.id === id ? { ...item, [field]: value } : item
       ),
     }));
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next.lineItems;
+      delete next.form;
+      return next;
+    });
   }
 
   function addLineItem() {
@@ -88,17 +130,8 @@ export function QuoteBuilder() {
       return;
     }
 
-    if (!quote.businessName.trim() || !quote.clientName.trim()) {
-      setExportError(
-        "Please fill in your business name and client name before exporting."
-      );
-      return;
-    }
-
-    // Normalize phone before PDF so export matches the field after blur
-    const payload: QuoteData = {
+    const payload = normalizeQuote({
       ...quote,
-      businessPhone: formatPhone(quote.businessPhone),
       taxRate: parseClampedNumber(String(quote.taxRate), {
         min: 0,
         max: 100,
@@ -117,16 +150,35 @@ export function QuoteBuilder() {
           fallback: 0,
         }),
       })),
-    };
+    });
+
+    const nextErrors = validateQuote(payload);
+    setErrors(nextErrors);
+
+    if (hasErrors(nextErrors)) {
+      setExportError("Fix the highlighted fields, then try again.");
+      // Sync normalized phone/email into the form for feedback
+      setQuote((prev) => ({
+        ...prev,
+        businessPhone: payload.businessPhone,
+        businessEmail: payload.businessEmail,
+        clientEmail: payload.clientEmail,
+      }));
+      return;
+    }
 
     try {
       generateQuotePdf(payload);
       recordQuoteExport();
       setRemaining(getQuotesRemaining());
-      // Keep formatted phone in the form
-      if (payload.businessPhone !== quote.businessPhone) {
-        updateField("businessPhone", payload.businessPhone);
-      }
+      setQuote((prev) => ({
+        ...prev,
+        businessPhone: payload.businessPhone,
+        businessEmail: payload.businessEmail,
+        clientEmail: payload.clientEmail,
+        businessName: payload.businessName,
+        clientName: payload.clientName,
+      }));
     } catch {
       setExportError(
         "Something went wrong generating the PDF. Try simplifying long fields and download again."
@@ -137,12 +189,6 @@ export function QuoteBuilder() {
   const sub = subtotal(quote.lineItems);
   const tax = taxAmount(quote.lineItems, quote.taxRate);
   const total = grandTotal(quote.lineItems, quote.taxRate);
-  const dateWarning =
-    quote.quoteDate &&
-    quote.validUntil &&
-    quote.validUntil < quote.quoteDate
-      ? "Valid-until date is before the quote date."
-      : null;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
@@ -173,28 +219,38 @@ export function QuoteBuilder() {
               <div className="sm:col-span-2">
                 <label className="label-field">Business Name *</label>
                 <input
-                  className="input-field"
+                  className={inputClass(!!errors.businessName)}
                   value={quote.businessName}
                   onChange={(e) => updateField("businessName", e.target.value)}
                   placeholder="Acme Plumbing Co."
                   maxLength={200}
                 />
+                <FieldError message={errors.businessName} />
               </div>
               <div>
                 <label className="label-field">Email</label>
                 <input
-                  className="input-field"
-                  type="email"
+                  className={inputClass(!!errors.businessEmail)}
+                  type="text"
+                  inputMode="email"
+                  autoComplete="email"
                   value={quote.businessEmail}
                   onChange={(e) => updateField("businessEmail", e.target.value)}
+                  onBlur={() =>
+                    updateField(
+                      "businessEmail",
+                      quote.businessEmail.trim().toLowerCase()
+                    )
+                  }
                   placeholder="you@business.com"
                   maxLength={120}
                 />
+                <FieldError message={errors.businessEmail} />
               </div>
               <div>
                 <label className="label-field">Phone</label>
                 <input
-                  className="input-field"
+                  className={inputClass(!!errors.businessPhone)}
                   type="tel"
                   inputMode="tel"
                   value={quote.businessPhone}
@@ -205,6 +261,7 @@ export function QuoteBuilder() {
                   placeholder="(555) 123-4567"
                   maxLength={40}
                 />
+                <FieldError message={errors.businessPhone} />
               </div>
               <div className="sm:col-span-2">
                 <label className="label-field">Address</label>
@@ -227,23 +284,33 @@ export function QuoteBuilder() {
               <div className="sm:col-span-2">
                 <label className="label-field">Client Name *</label>
                 <input
-                  className="input-field"
+                  className={inputClass(!!errors.clientName)}
                   value={quote.clientName}
                   onChange={(e) => updateField("clientName", e.target.value)}
                   placeholder="John Smith"
                   maxLength={200}
                 />
+                <FieldError message={errors.clientName} />
               </div>
               <div>
                 <label className="label-field">Client Email</label>
                 <input
-                  className="input-field"
-                  type="email"
+                  className={inputClass(!!errors.clientEmail)}
+                  type="text"
+                  inputMode="email"
+                  autoComplete="email"
                   value={quote.clientEmail}
                   onChange={(e) => updateField("clientEmail", e.target.value)}
+                  onBlur={() =>
+                    updateField(
+                      "clientEmail",
+                      quote.clientEmail.trim().toLowerCase()
+                    )
+                  }
                   placeholder="client@email.com"
                   maxLength={120}
                 />
+                <FieldError message={errors.clientEmail} />
               </div>
               <div className="sm:col-span-2">
                 <label className="label-field">Client Address</label>
@@ -306,23 +373,22 @@ export function QuoteBuilder() {
               <div>
                 <label className="label-field">Quote Date</label>
                 <input
-                  className="input-field"
+                  className={inputClass(!!errors.quoteDate)}
                   type="date"
                   value={quote.quoteDate}
                   onChange={(e) => updateField("quoteDate", e.target.value)}
                 />
+                <FieldError message={errors.quoteDate} />
               </div>
               <div>
                 <label className="label-field">Valid Until</label>
                 <input
-                  className="input-field"
+                  className={inputClass(!!errors.validUntil)}
                   type="date"
                   value={quote.validUntil}
                   onChange={(e) => updateField("validUntil", e.target.value)}
                 />
-                {dateWarning && (
-                  <p className="mt-1 text-xs text-amber-600">{dateWarning}</p>
-                )}
+                <FieldError message={errors.validUntil} />
               </div>
             </div>
           </section>
@@ -340,6 +406,12 @@ export function QuoteBuilder() {
                 Add Item
               </button>
             </div>
+
+            {errors.lineItems && (
+              <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+                {errors.lineItems}
+              </p>
+            )}
 
             <div className="space-y-4">
               {quote.lineItems.map((item, index) => (
@@ -400,9 +472,8 @@ export function QuoteBuilder() {
                       <label className="label-field">Unit Price</label>
                       <input
                         className="input-field"
-                        type="number"
-                        min="0"
-                        step="0.01"
+                        type="text"
+                        inputMode="decimal"
                         value={item.unitPrice}
                         onChange={(e) =>
                           updateLineItem(
@@ -415,6 +486,7 @@ export function QuoteBuilder() {
                             })
                           )
                         }
+                        placeholder="0.00"
                       />
                     </div>
                     <div className="sm:col-span-2">
@@ -469,9 +541,9 @@ export function QuoteBuilder() {
                 </div>
               </div>
 
-              {exportError && (
+              {(exportError || errors.form) && (
                 <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
-                  {exportError}
+                  {errors.form || exportError}
                 </p>
               )}
 

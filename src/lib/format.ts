@@ -18,15 +18,37 @@ export function formatPhone(value: string): string {
   const extMatch = trimmed.match(/(?:ext\.?|x)\s*[:.]?\s*(\d+)\s*$/i);
   const ext = extMatch ? ` ext. ${extMatch[1]}` : "";
 
-  if (digits.length === 10) {
-    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}${ext}`;
+  // Strip extension digits from the main number for formatting
+  let mainDigits = digits;
+  if (extMatch && digits.length > 10) {
+    const extDigits = extMatch[1];
+    if (digits.endsWith(extDigits)) {
+      mainDigits = digits.slice(0, digits.length - extDigits.length);
+    }
   }
 
-  if (digits.length === 11 && digits.startsWith("1")) {
-    return `+1 (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}${ext}`;
+  if (mainDigits.length === 10) {
+    return `(${mainDigits.slice(0, 3)}) ${mainDigits.slice(3, 6)}-${mainDigits.slice(6)}${ext}`;
+  }
+
+  if (mainDigits.length === 11 && mainDigits.startsWith("1")) {
+    return `+1 (${mainDigits.slice(1, 4)}) ${mainDigits.slice(4, 7)}-${mainDigits.slice(7)}${ext}`;
   }
 
   return trimmed;
+}
+
+/** Display dates as "Aug 2, 2026" instead of ISO. */
+export function formatDisplayDate(iso: string): string {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso || "—";
+  const [y, m, d] = iso.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 /**
@@ -41,6 +63,7 @@ export function sanitizePdfText(value: string): string {
     .replace(/\u2026/g, "...")
     .replace(/\u00A0/g, " ")
     .replace(/\u2022/g, "*")
+    .replace(/\t/g, " ")
     .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, "?");
 }
 
@@ -61,7 +84,9 @@ export function parseClampedNumber(
 ): number {
   const { min = -Infinity, max = Infinity, fallback = 0 } = opts;
   if (raw.trim() === "" || raw === "-" || raw === ".") return fallback;
-  const n = Number(raw);
+  // Strip currency symbols people paste from elsewhere
+  const cleaned = raw.replace(/[$,\s]/g, "");
+  const n = Number(cleaned);
   if (!Number.isFinite(n)) return fallback;
   return Math.min(max, Math.max(min, n));
 }
