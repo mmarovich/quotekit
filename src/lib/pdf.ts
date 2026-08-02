@@ -46,7 +46,7 @@ function ensureSpace(doc: jsPDF, y: number, needed: number): number {
   return MARGIN + 6;
 }
 
-function drawFooters(doc: jsPDF): void {
+function drawFooters(doc: jsPDF, isPro: boolean): void {
   const total = doc.getNumberOfPages();
   const width = doc.internal.pageSize.getWidth();
   for (let i = 1; i <= total; i++) {
@@ -54,12 +54,14 @@ function drawFooters(doc: jsPDF): void {
     doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(120, 120, 120);
-    doc.text(
-      "Generated with QuoteKit — quotekit-silk.vercel.app",
-      width / 2,
-      FOOTER_Y,
-      { align: "center" }
-    );
+    if (!isPro) {
+      doc.text(
+        "Generated with QuoteKit — quotekit-silk.vercel.app",
+        width / 2,
+        FOOTER_Y,
+        { align: "center" }
+      );
+    }
     if (total > 1) {
       doc.text(`Page ${i} of ${total}`, width - MARGIN, FOOTER_Y, {
         align: "right",
@@ -86,7 +88,16 @@ function drawLines(
   return y;
 }
 
-export function generateQuotePdf(quote: QuoteData): void {
+export interface PdfOptions {
+  /** Pro subscribers: hide QuoteKit marketing footer. */
+  isPro?: boolean;
+}
+
+export function generateQuotePdf(
+  quote: QuoteData,
+  options: PdfOptions = {}
+): void {
+  const isPro = options.isPro === true;
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const leftColWidth = pageWidth * 0.55 - MARGIN;
@@ -321,7 +332,7 @@ export function generateQuotePdf(quote: QuoteData): void {
     }
   }
 
-  drawFooters(doc);
+  drawFooters(doc, isPro);
 
   const filename = `quote-${safeFilename(quote.quoteNumber)}.pdf`;
   doc.save(filename);

@@ -41,17 +41,31 @@ export function getQuotesRemaining(): number {
   return Math.max(0, FREE_QUOTE_LIMIT - usage.count);
 }
 
-export function canExportQuote(): boolean {
+export function canExportQuote(isPro: boolean): boolean {
+  if (isPro) return true;
   return getQuotesRemaining() > 0;
 }
 
-export function recordQuoteExport(): void {
+export function recordQuoteExport(isPro: boolean): void {
+  if (isPro) return;
   const usage = getUsage();
   const updated: UsageData = {
     count: usage.count + 1,
     month: currentMonth(),
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+}
+
+/** Ask the server if this browser has an active Stripe subscription. */
+export async function fetchProStatus(): Promise<boolean> {
+  try {
+    const res = await fetch("/api/pro-status", { cache: "no-store" });
+    if (!res.ok) return false;
+    const data = (await res.json()) as { pro?: boolean };
+    return data.pro === true;
+  } catch {
+    return false;
+  }
 }
 
 export const FREE_LIMIT = FREE_QUOTE_LIMIT;

@@ -19,6 +19,7 @@ import {
 } from "@/lib/calculations";
 import {
   canExportQuote,
+  fetchProStatus,
   getQuotesRemaining,
   recordQuoteExport,
   resetUsage,
@@ -47,6 +48,7 @@ function inputClass(hasError?: boolean) {
 export function QuoteBuilder() {
   const [quote, setQuote] = useState<QuoteData>(DEFAULT_QUOTE);
   const [remaining, setRemaining] = useState(FREE_LIMIT);
+  const [isPro, setIsPro] = useState(false);
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [exportError, setExportError] = useState<string | null>(null);
@@ -62,6 +64,7 @@ export function QuoteBuilder() {
       }
     }
     setRemaining(getQuotesRemaining());
+    void fetchProStatus().then(setIsPro);
   }, []);
 
   function updateField<K extends keyof QuoteData>(key: K, value: QuoteData[K]) {
@@ -125,7 +128,7 @@ export function QuoteBuilder() {
   function handleExport() {
     setExportError(null);
 
-    if (!canExportQuote()) {
+    if (!canExportQuote(isPro)) {
       setShowLimitModal(true);
       return;
     }
@@ -168,8 +171,8 @@ export function QuoteBuilder() {
     }
 
     try {
-      generateQuotePdf(payload);
-      recordQuoteExport();
+      generateQuotePdf(payload, { isPro });
+      recordQuoteExport(isPro);
       setRemaining(getQuotesRemaining());
       setQuote((prev) => ({
         ...prev,
@@ -202,9 +205,17 @@ export function QuoteBuilder() {
           </p>
         </div>
         {mounted && (
-          <div className="inline-flex items-center gap-2 rounded-full bg-brand-50 px-4 py-2 text-sm font-medium text-brand-700">
+          <div
+            className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium ${
+              isPro
+                ? "bg-green-50 text-green-800"
+                : "bg-brand-50 text-brand-700"
+            }`}
+          >
             <Sparkles className="h-4 w-4" />
-            {remaining} of {FREE_LIMIT} free exports left this month
+            {isPro
+              ? "Pro — unlimited exports"
+              : `${remaining} of ${FREE_LIMIT} free exports left this month`}
           </div>
         )}
       </div>
