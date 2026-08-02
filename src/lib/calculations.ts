@@ -1,24 +1,29 @@
 import type { LineItem } from "./types";
+import { roundMoney } from "./format";
 
 export function lineTotal(item: LineItem): number {
-  return item.quantity * item.unitPrice;
+  const qty = Number.isFinite(item.quantity) ? item.quantity : 0;
+  const price = Number.isFinite(item.unitPrice) ? item.unitPrice : 0;
+  return roundMoney(qty * price);
 }
 
 export function subtotal(items: LineItem[]): number {
-  return items.reduce((sum, item) => sum + lineTotal(item), 0);
+  return roundMoney(items.reduce((sum, item) => sum + lineTotal(item), 0));
 }
 
 export function taxAmount(items: LineItem[], taxRate: number): number {
-  return subtotal(items) * (taxRate / 100);
+  const rate = Number.isFinite(taxRate) ? Math.max(0, Math.min(100, taxRate)) : 0;
+  return roundMoney(subtotal(items) * (rate / 100));
 }
 
 export function grandTotal(items: LineItem[], taxRate: number): number {
-  return subtotal(items) + taxAmount(items, taxRate);
+  return roundMoney(subtotal(items) + taxAmount(items, taxRate));
 }
 
 export function formatCurrency(amount: number): string {
+  const safe = Number.isFinite(amount) ? amount : 0;
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
-  }).format(amount);
+  }).format(safe);
 }

@@ -24,17 +24,18 @@ import {
   resetUsage,
   FREE_LIMIT,
 } from "@/lib/usage";
+import { formatPhone, parseClampedNumber } from "@/lib/format";
 import { generateQuotePdf } from "@/lib/pdf";
 
 export function QuoteBuilder() {
   const [quote, setQuote] = useState<QuoteData>(DEFAULT_QUOTE);
   const [remaining, setRemaining] = useState(FREE_LIMIT);
   const [showLimitModal, setShowLimitModal] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    // Owner/testing: visit /builder?reset=usage to refill free exports
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       if (params.get("reset") === "usage") {
@@ -80,24 +81,68 @@ export function QuoteBuilder() {
   }
 
   function handleExport() {
+    setExportError(null);
+
     if (!canExportQuote()) {
       setShowLimitModal(true);
       return;
     }
 
     if (!quote.businessName.trim() || !quote.clientName.trim()) {
-      alert("Please fill in your business name and client name before exporting.");
+      setExportError(
+        "Please fill in your business name and client name before exporting."
+      );
       return;
     }
 
-    generateQuotePdf(quote);
-    recordQuoteExport();
-    setRemaining(getQuotesRemaining());
+    // Normalize phone before PDF so export matches the field after blur
+    const payload: QuoteData = {
+      ...quote,
+      businessPhone: formatPhone(quote.businessPhone),
+      taxRate: parseClampedNumber(String(quote.taxRate), {
+        min: 0,
+        max: 100,
+        fallback: 0,
+      }),
+      lineItems: quote.lineItems.map((item) => ({
+        ...item,
+        quantity: parseClampedNumber(String(item.quantity), {
+          min: 0,
+          max: 1_000_000,
+          fallback: 0,
+        }),
+        unitPrice: parseClampedNumber(String(item.unitPrice), {
+          min: 0,
+          max: 1_000_000_000,
+          fallback: 0,
+        }),
+      })),
+    };
+
+    try {
+      generateQuotePdf(payload);
+      recordQuoteExport();
+      setRemaining(getQuotesRemaining());
+      // Keep formatted phone in the form
+      if (payload.businessPhone !== quote.businessPhone) {
+        updateField("businessPhone", payload.businessPhone);
+      }
+    } catch {
+      setExportError(
+        "Something went wrong generating the PDF. Try simplifying long fields and download again."
+      );
+    }
   }
 
   const sub = subtotal(quote.lineItems);
   const tax = taxAmount(quote.lineItems, quote.taxRate);
   const total = grandTotal(quote.lineItems, quote.taxRate);
+  const dateWarning =
+    quote.quoteDate &&
+    quote.validUntil &&
+    quote.validUntil < quote.quoteDate
+      ? "Valid-until date is before the quote date."
+      : null;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
@@ -132,6 +177,7 @@ export function QuoteBuilder() {
                   value={quote.businessName}
                   onChange={(e) => updateField("businessName", e.target.value)}
                   placeholder="Acme Plumbing Co."
+                  maxLength={200}
                 />
               </div>
               <div>
@@ -142,15 +188,22 @@ export function QuoteBuilder() {
                   value={quote.businessEmail}
                   onChange={(e) => updateField("businessEmail", e.target.value)}
                   placeholder="you@business.com"
+                  maxLength={120}
                 />
               </div>
               <div>
                 <label className="label-field">Phone</label>
                 <input
                   className="input-field"
+                  type="tel"
+                  inputMode="tel"
                   value={quote.businessPhone}
                   onChange={(e) => updateField("businessPhone", e.target.value)}
+                  onBlur={() =>
+                    updateField("businessPhone", formatPhone(quote.businessPhone))
+                  }
                   placeholder="(555) 123-4567"
+                  maxLength={40}
                 />
               </div>
               <div className="sm:col-span-2">
@@ -161,7 +214,8 @@ export function QuoteBuilder() {
                   onChange={(e) =>
                     updateField("businessAddress", e.target.value)
                   }
-                  placeholder="123 Main St, City, State ZIP"
+                  placeholder={"123 Main St\nSuite 4\nCity, State ZIP"}
+                  maxLength={500}
                 />
               </div>
             </div>
@@ -177,6 +231,7 @@ export function QuoteBuilder() {
                   value={quote.clientName}
                   onChange={(e) => updateField("clientName", e.target.value)}
                   placeholder="John Smith"
+                  maxLength={200}
                 />
               </div>
               <div>
@@ -187,6 +242,7 @@ export function QuoteBuilder() {
                   value={quote.clientEmail}
                   onChange={(e) => updateField("clientEmail", e.target.value)}
                   placeholder="client@email.com"
+                  maxLength={120}
                 />
               </div>
               <div className="sm:col-span-2">
@@ -196,6 +252,7 @@ export function QuoteBuilder() {
                   value={quote.clientAddress}
                   onChange={(e) => updateField("clientAddress", e.target.value)}
                   placeholder="Client billing address"
+                  maxLength={500}
                 />
               </div>
             </div>
@@ -213,6 +270,7 @@ export function QuoteBuilder() {
                   value={quote.projectTitle}
                   onChange={(e) => updateField("projectTitle", e.target.value)}
                   placeholder="Kitchen Renovation — Phase 1"
+                  maxLength={200}
                 />
               </div>
               <div>
@@ -221,6 +279,7 @@ export function QuoteBuilder() {
                   className="input-field"
                   value={quote.quoteNumber}
                   onChange={(e) => updateField("quoteNumber", e.target.value)}
+                  maxLength={40}
                 />
               </div>
               <div>
@@ -233,7 +292,14 @@ export function QuoteBuilder() {
                   step="0.1"
                   value={quote.taxRate}
                   onChange={(e) =>
-                    updateField("taxRate", parseFloat(e.target.value) || 0)
+                    updateField(
+                      "taxRate",
+                      parseClampedNumber(e.target.value, {
+                        min: 0,
+                        max: 100,
+                        fallback: 0,
+                      })
+                    )
                   }
                 />
               </div>
@@ -254,6 +320,9 @@ export function QuoteBuilder() {
                   value={quote.validUntil}
                   onChange={(e) => updateField("validUntil", e.target.value)}
                 />
+                {dateWarning && (
+                  <p className="mt-1 text-xs text-amber-600">{dateWarning}</p>
+                )}
               </div>
             </div>
           </section>
@@ -261,7 +330,12 @@ export function QuoteBuilder() {
           <section className="card">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-slate-900">Line Items</h2>
-              <button type="button" onClick={addLineItem} className="btn-secondary text-xs">
+              <button
+                type="button"
+                onClick={addLineItem}
+                className="btn-secondary text-xs"
+                disabled={quote.lineItems.length >= 100}
+              >
                 <Plus className="h-4 w-4" />
                 Add Item
               </button>
@@ -298,6 +372,7 @@ export function QuoteBuilder() {
                           updateLineItem(item.id, "description", e.target.value)
                         }
                         placeholder="Labor — 8 hours"
+                        maxLength={300}
                       />
                     </div>
                     <div className="sm:col-span-2">
@@ -312,7 +387,11 @@ export function QuoteBuilder() {
                           updateLineItem(
                             item.id,
                             "quantity",
-                            parseFloat(e.target.value) || 0
+                            parseClampedNumber(e.target.value, {
+                              min: 0,
+                              max: 1_000_000,
+                              fallback: 0,
+                            })
                           )
                         }
                       />
@@ -329,7 +408,11 @@ export function QuoteBuilder() {
                           updateLineItem(
                             item.id,
                             "unitPrice",
-                            parseFloat(e.target.value) || 0
+                            parseClampedNumber(e.target.value, {
+                              min: 0,
+                              max: 1_000_000_000,
+                              fallback: 0,
+                            })
                           )
                         }
                       />
@@ -344,6 +427,11 @@ export function QuoteBuilder() {
                 </div>
               ))}
             </div>
+            {quote.lineItems.length >= 100 && (
+              <p className="mt-3 text-xs text-slate-500">
+                Max 100 line items per quote.
+              </p>
+            )}
           </section>
 
           <section className="card">
@@ -353,6 +441,7 @@ export function QuoteBuilder() {
               value={quote.notes}
               onChange={(e) => updateField("notes", e.target.value)}
               placeholder="Payment terms, warranty info, or project scope details..."
+              maxLength={2000}
             />
           </section>
         </div>
@@ -379,6 +468,12 @@ export function QuoteBuilder() {
                   </div>
                 </div>
               </div>
+
+              {exportError && (
+                <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+                  {exportError}
+                </p>
+              )}
 
               <button
                 type="button"
