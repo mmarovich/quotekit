@@ -17,7 +17,7 @@ export function Header() {
             Features
           </Link>
           <Link href="/pricing" className="transition hover:text-brand-600">
-            Pricing
+            Free forever
           </Link>
         </nav>
 

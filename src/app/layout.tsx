@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { Inter, Plus_Jakarta_Sans } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
+import { GoogleAnalytics } from "@/components/GoogleAnalytics";
 import "./globals.css";
 
 const inter = Inter({
@@ -20,7 +22,7 @@ export const metadata: Metadata = {
     template: "%s | QuoteKit",
   },
   description:
-    "Create professional quotes and proposals in minutes. Free quote builder for freelancers, contractors, and small businesses. Download PDF instantly.",
+    "Free forever quote & proposal generator. Unlimited professional PDF quotes for freelancers, contractors, and small businesses. No signup.",
   keywords: [
     "free quote generator",
     "proposal builder",
@@ -32,7 +34,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "QuoteKit — Free Quote & Proposal Generator",
     description:
-      "Create professional quotes in minutes. Free to start, no signup required.",
+      "Create professional quotes in minutes. Free forever, unlimited PDFs, no signup.",
     type: "website",
     siteName: "QuoteKit",
   },
@@ -50,9 +52,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} ${plusJakarta.variable} font-sans`}>
+        <GoogleAnalytics />
         <Header />
         <main>{children}</main>
         <Footer />
+        <Analytics />
       </body>
     </html>
   );

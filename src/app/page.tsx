@@ -25,7 +25,7 @@ const features = [
     icon: Download,
     title: "Instant PDF export",
     description:
-      "Download and email your quote immediately. No watermarks on the free tier.",
+      "Download and email your quote immediately. Unlimited free PDFs.",
   },
   {
     icon: Shield,
@@ -58,7 +58,7 @@ export default function HomePage() {
           <div className="mx-auto max-w-3xl text-center">
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-4 py-1.5 text-sm font-medium text-brand-700">
               <Zap className="h-4 w-4" />
-              Free quote generator — no signup required
+              Free forever — unlimited PDFs, no signup
             </div>
             <h1 className="font-display text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl lg:text-6xl">
               Win more jobs with{" "}
@@ -66,8 +66,8 @@ export default function HomePage() {
             </h1>
             <p className="mx-auto mt-6 max-w-2xl text-lg text-slate-600">
               QuoteKit helps freelancers and contractors create polished quotes
-              and proposals in minutes. Free to start — upgrade when you need
-              unlimited exports and custom branding.
+              and proposals in minutes. Completely free — no account, no credit
+              card, no export limits.
             </p>
             <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
               <Link href="/builder" className="btn-primary px-8 py-3 text-base">
@@ -75,11 +75,11 @@ export default function HomePage() {
                 <ArrowRight className="h-5 w-5" />
               </Link>
               <Link href="/pricing" className="btn-secondary px-8 py-3 text-base">
-                View Pricing
+                Free forever
               </Link>
             </div>
             <p className="mt-4 text-sm text-slate-500">
-              3 free PDF exports per month · No credit card required
+              Unlimited PDF exports · No credit card · No signup
             </p>
           </div>
         </div>

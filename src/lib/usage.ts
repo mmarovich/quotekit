@@ -1,9 +1,14 @@
+/**
+ * Free forever mode: no export caps.
+ * Local usage helpers kept only for optional personal stats display.
+ */
+
 const STORAGE_KEY = "quotekit_usage";
-const FREE_QUOTE_LIMIT = 3;
 
 interface UsageData {
   count: number;
   month: string;
+  lifetime: number;
 }
 
 function currentMonth(): string {
@@ -13,59 +18,58 @@ function currentMonth(): string {
 
 function getUsage(): UsageData {
   if (typeof window === "undefined") {
-    return { count: 0, month: currentMonth() };
+    return { count: 0, month: currentMonth(), lifetime: 0 };
   }
 
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { count: 0, month: currentMonth() };
+    if (!raw) return { count: 0, month: currentMonth(), lifetime: 0 };
 
-    const data = JSON.parse(raw) as UsageData;
-    if (data.month !== currentMonth()) {
-      return { count: 0, month: currentMonth() };
-    }
-    return data;
+    const data = JSON.parse(raw) as Partial<UsageData>;
+    const month = data.month === currentMonth() ? data.month : currentMonth();
+    const count = data.month === currentMonth() ? (data.count ?? 0) : 0;
+    return {
+      count,
+      month,
+      lifetime: data.lifetime ?? data.count ?? 0,
+    };
   } catch {
-    return { count: 0, month: currentMonth() };
+    return { count: 0, month: currentMonth(), lifetime: 0 };
   }
 }
 
-/** Owner/testing: wipe the free-tier counter for this browser. */
+/** How many PDFs this browser has exported this month (personal only). */
+export function getLocalExportCount(): number {
+  return getUsage().count;
+}
+
+export function getLocalLifetimeExports(): number {
+  return getUsage().lifetime;
+}
+
+/** Always allowed — product is free forever. */
+export function canExportQuote(): boolean {
+  return true;
+}
+
+/** Record a successful export in this browser only (not site-wide). */
+export function recordLocalExport(): void {
+  if (typeof window === "undefined") return;
+  const usage = getUsage();
+  const updated: UsageData = {
+    count: usage.count + 1,
+    month: currentMonth(),
+    lifetime: usage.lifetime + 1,
+  };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+}
+
 export function resetUsage(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem(STORAGE_KEY);
 }
 
-export function getQuotesRemaining(): number {
-  const usage = getUsage();
-  return Math.max(0, FREE_QUOTE_LIMIT - usage.count);
-}
-
-export function canExportQuote(isPro: boolean): boolean {
-  if (isPro) return true;
-  return getQuotesRemaining() > 0;
-}
-
-export function recordQuoteExport(isPro: boolean): void {
-  if (isPro) return;
-  const usage = getUsage();
-  const updated: UsageData = {
-    count: usage.count + 1,
-    month: currentMonth(),
-  };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-}
-
-/** Ask the server if this browser has an active Stripe subscription. */
+/** @deprecated Free forever — always true for “pro” features we used to gate. */
 export async function fetchProStatus(): Promise<boolean> {
-  try {
-    const res = await fetch("/api/pro-status", { cache: "no-store" });
-    if (!res.ok) return false;
-    const data = (await res.json()) as { pro?: boolean };
-    return data.pro === true;
-  } catch {
-    return false;
-  }
+  return true;
 }
-
-export const FREE_LIMIT = FREE_QUOTE_LIMIT;

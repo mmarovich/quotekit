@@ -1,12 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import {
   Download,
   Plus,
   Trash2,
-  AlertCircle,
   Sparkles,
 } from "lucide-react";
 import { DEFAULT_QUOTE, EMPTY_LINE_ITEM, type QuoteData } from "@/lib/types";
@@ -18,12 +16,9 @@ import {
   taxAmount,
 } from "@/lib/calculations";
 import {
-  canExportQuote,
-  fetchProStatus,
-  getQuotesRemaining,
-  recordQuoteExport,
-  resetUsage,
-  FREE_LIMIT,
+  getLocalExportCount,
+  getLocalLifetimeExports,
+  recordLocalExport,
 } from "@/lib/usage";
 import { formatPhone, parseClampedNumber } from "@/lib/format";
 import {
@@ -33,6 +28,7 @@ import {
   validateQuote,
 } from "@/lib/validate";
 import { generateQuotePdf } from "@/lib/pdf";
+import { trackPdfExport } from "@/lib/analytics";
 
 function FieldError({ message }: { message?: string }) {
   if (!message) return null;
@@ -47,29 +43,20 @@ function inputClass(hasError?: boolean) {
 
 export function QuoteBuilder() {
   const [quote, setQuote] = useState<QuoteData>(DEFAULT_QUOTE);
-  const [remaining, setRemaining] = useState(FREE_LIMIT);
-  const [isPro, setIsPro] = useState(false);
-  const [showLimitModal, setShowLimitModal] = useState(false);
+  const [localCount, setLocalCount] = useState(0);
+  const [localLifetime, setLocalLifetime] = useState(0);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [exportError, setExportError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get("reset") === "usage") {
-        resetUsage();
-        window.history.replaceState({}, "", "/builder");
-      }
-    }
-    setRemaining(getQuotesRemaining());
-    void fetchProStatus().then(setIsPro);
+    setLocalCount(getLocalExportCount());
+    setLocalLifetime(getLocalLifetimeExports());
   }, []);
 
   function updateField<K extends keyof QuoteData>(key: K, value: QuoteData[K]) {
     setQuote((prev) => ({ ...prev, [key]: value }));
-    // Clear field error as user types
     setErrors((prev) => {
       const next = { ...prev };
       const map: Record<string, keyof FieldErrors> = {
@@ -128,11 +115,6 @@ export function QuoteBuilder() {
   function handleExport() {
     setExportError(null);
 
-    if (!canExportQuote(isPro)) {
-      setShowLimitModal(true);
-      return;
-    }
-
     const payload = normalizeQuote({
       ...quote,
       taxRate: parseClampedNumber(String(quote.taxRate), {
@@ -160,7 +142,6 @@ export function QuoteBuilder() {
 
     if (hasErrors(nextErrors)) {
       setExportError("Fix the highlighted fields, then try again.");
-      // Sync normalized phone/email into the form for feedback
       setQuote((prev) => ({
         ...prev,
         businessPhone: payload.businessPhone,
@@ -171,9 +152,11 @@ export function QuoteBuilder() {
     }
 
     try {
-      generateQuotePdf(payload, { isPro });
-      recordQuoteExport(isPro);
-      setRemaining(getQuotesRemaining());
+      generateQuotePdf(payload, { isPro: false });
+      recordLocalExport();
+      trackPdfExport();
+      setLocalCount(getLocalExportCount());
+      setLocalLifetime(getLocalLifetimeExports());
       setQuote((prev) => ({
         ...prev,
         businessPhone: payload.businessPhone,
@@ -201,21 +184,18 @@ export function QuoteBuilder() {
             Quote Builder
           </h1>
           <p className="mt-1 text-slate-600">
-            Fill in the details, then download a professional PDF.
+            Free forever — fill in the details, download a professional PDF.
           </p>
         </div>
         {mounted && (
-          <div
-            className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium ${
-              isPro
-                ? "bg-green-50 text-green-800"
-                : "bg-brand-50 text-brand-700"
-            }`}
-          >
+          <div className="inline-flex items-center gap-2 rounded-full bg-green-50 px-4 py-2 text-sm font-medium text-green-800">
             <Sparkles className="h-4 w-4" />
-            {isPro
-              ? "Pro — unlimited exports"
-              : `${remaining} of ${FREE_LIMIT} free exports left this month`}
+            Unlimited free exports
+            {localLifetime > 0 && (
+              <span className="text-green-700/70">
+                · {localCount} this month ({localLifetime} total here)
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -515,11 +495,6 @@ export function QuoteBuilder() {
                 </div>
               ))}
             </div>
-            {quote.lineItems.length >= 100 && (
-              <p className="mt-3 text-xs text-slate-500">
-                Max 100 line items per quote.
-              </p>
-            )}
           </section>
 
           <section className="card">
@@ -574,51 +549,15 @@ export function QuoteBuilder() {
             </div>
 
             <div className="rounded-xl border border-brand-200 bg-brand-50 p-5">
-              <p className="text-sm font-semibold text-brand-900">Pro tip</p>
+              <p className="text-sm font-semibold text-brand-900">100% free</p>
               <p className="mt-1 text-sm text-brand-700">
-                Upgrade to Pro for unlimited exports, custom branding, and saved
-                clients.{" "}
-                <Link href="/pricing" className="font-semibold underline">
-                  See pricing
-                </Link>
+                Unlimited quotes. No account. Share the link if it helps someone
+                you know.
               </p>
             </div>
           </div>
         </div>
       </div>
-
-      {showLimitModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
-            <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100">
-                <AlertCircle className="h-5 w-5 text-amber-600" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-slate-900">
-                  Free limit reached
-                </h3>
-                <p className="mt-2 text-sm text-slate-600">
-                  You&apos;ve used all {FREE_LIMIT} free quote exports this month.
-                  Upgrade to Pro for unlimited PDFs, custom branding, and more.
-                </p>
-                <div className="mt-6 flex gap-3">
-                  <Link href="/pricing" className="btn-primary flex-1 text-center">
-                    Upgrade to Pro
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => setShowLimitModal(false)}
-                    className="btn-secondary flex-1"
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
