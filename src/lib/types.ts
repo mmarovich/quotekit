@@ -29,6 +29,20 @@ export const EMPTY_LINE_ITEM = (): LineItem => ({
   unitPrice: 0,
 });
 
+/** Local calendar date as YYYY-MM-DD (not UTC — avoids "tomorrow" bugs in US timezones). */
+function localDateString(date: Date = new Date()): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function localDatePlusDays(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return localDateString(date);
+}
+
 export const DEFAULT_QUOTE = (): QuoteData => ({
   businessName: "",
   businessEmail: "",
@@ -38,10 +52,8 @@ export const DEFAULT_QUOTE = (): QuoteData => ({
   clientEmail: "",
   clientAddress: "",
   quoteNumber: `Q-${Date.now().toString().slice(-6)}`,
-  quoteDate: new Date().toISOString().split("T")[0],
-  validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .split("T")[0],
+  quoteDate: localDateString(),
+  validUntil: localDatePlusDays(30),
   projectTitle: "",
   notes: "",
   taxRate: 0,

@@ -311,6 +311,11 @@ export function QuoteBuilder() {
                   maxLength={120}
                 />
                 <FieldError message={errors.clientEmail} />
+                {!errors.clientEmail && (
+                  <p className="mt-1 text-xs text-slate-500">
+                    Printed on the PDF only — we never email your client.
+                  </p>
+                )}
               </div>
               <div className="sm:col-span-2">
                 <label className="label-field">Client Address</label>
