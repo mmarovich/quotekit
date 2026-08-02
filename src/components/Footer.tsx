@@ -1,17 +1,29 @@
 import Link from "next/link";
+import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "@/lib/contact";
 
 export function Footer() {
   return (
     <footer className="border-t border-slate-200 bg-white">
       <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
-        <div className="flex flex-col items-center justify-between gap-6 sm:flex-row">
+        <div className="flex flex-col gap-8 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="font-display text-lg font-bold text-slate-900">QuoteKit</p>
+            <p className="font-display text-lg font-bold text-slate-900">
+              QuoteKit
+            </p>
             <p className="mt-1 text-sm text-slate-500">
-              Professional quotes in minutes. Free to start.
+              Professional quotes in minutes. Free forever.
+            </p>
+            <p className="mt-4 text-sm text-slate-600">
+              Support:{" "}
+              <a
+                href={SUPPORT_MAILTO}
+                className="font-medium text-brand-600 hover:underline"
+              >
+                {SUPPORT_EMAIL}
+              </a>
             </p>
           </div>
-          <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-slate-600 sm:justify-end">
+          <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-600 sm:justify-end">
             <Link href="/builder" className="hover:text-brand-600">
               Quote Builder
             </Link>
@@ -22,7 +34,10 @@ export function Footer() {
               Contractor Estimates
             </Link>
             <Link href="/pricing" className="hover:text-brand-600">
-              Pricing
+              Free forever
+            </Link>
+            <Link href="/contact" className="hover:text-brand-600">
+              Contact
             </Link>
           </div>
         </div>

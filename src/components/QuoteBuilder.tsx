@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   Download,
   Plus,
@@ -551,8 +552,14 @@ export function QuoteBuilder() {
             <div className="rounded-xl border border-brand-200 bg-brand-50 p-5">
               <p className="text-sm font-semibold text-brand-900">100% free</p>
               <p className="mt-1 text-sm text-brand-700">
-                Unlimited quotes. No account. Share the link if it helps someone
-                you know.
+                Unlimited quotes. No account. Found a bug or have an idea?{" "}
+                <a
+                  href="/contact"
+                  className="font-semibold underline hover:text-brand-900"
+                >
+                  Contact support
+                </a>
+                .
               </p>
             </div>
           </div>

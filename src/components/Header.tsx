@@ -19,6 +19,9 @@ export function Header() {
           <Link href="/pricing" className="transition hover:text-brand-600">
             Free forever
           </Link>
+          <Link href="/contact" className="transition hover:text-brand-600">
+            Contact
+          </Link>
         </nav>
 
         <div className="flex items-center gap-3">

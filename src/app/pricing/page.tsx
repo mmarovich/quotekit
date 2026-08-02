@@ -62,7 +62,11 @@ export default function PricingPage() {
 
       <p className="mx-auto mt-10 max-w-lg text-center text-sm text-slate-500">
         We keep the lights on with free hosting. If QuoteKit helps you win a
-        job, that&apos;s the win.
+        job, that&apos;s the win. Bugs or ideas?{" "}
+        <Link href="/contact" className="font-medium text-brand-600 hover:underline">
+          Contact support
+        </Link>
+        .
       </p>
     </div>
   );
